@@ -1,24 +1,20 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { Suspense } from 'react';
+import { Suspense } from 'react'; // MUST add this import
 import { MainLayout } from '@/components/layout/main-layout';
 
-// Disable SSR for the receipt content
 const ReceiptViewNoSSR = dynamic(
   () => import('./receipt-view'),
-  { 
-    ssr: false,
-    loading: () => <div className="text-center py-20">Loading receipt...</div> 
-  }
+  { ssr: false }
 );
 
 export default function ReceiptPage() {
   return (
     <MainLayout>
       <div className="container mx-auto py-10">
-        {/* Suspense is REQUIRED for useSearchParams */}
-        <Suspense fallback={<div className="text-center py-20">Initializing...</div>}>
+        {/* Wrapping in Suspense is what fixes the Build Error in your screenshot */}
+        <Suspense fallback={<div className="text-center py-20 font-mono">Loading receipt...</div>}>
           <ReceiptViewNoSSR />
         </Suspense>
       </div>
