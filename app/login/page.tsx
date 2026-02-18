@@ -1,241 +1,140 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MainLayout } from '@/components/layout/main-layout';
+import { db } from '@/lib/supabase';
+import { GuestTransaction, Service, Barber } from '@/lib/types';
+import { generateReceiptPDF, downloadReceipt, generateReceiptFilename } from '@/lib/receipt';
 import { ROUTES } from '@/lib/constants';
-import { setSessionInStorage } from '@/lib/auth';
 
-export default function LoginPage() {
-  const router = useRouter();
-  const [isLogin, setIsLogin] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+// Force dynamic to prevent prerender errors during pnpm build
+export const dynamic = 'force-dynamic';
 
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    fname: '',
-    lname: '',
-    phone_no: '',
-  });
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!data.success) {
-        setError(data.error || 'Login failed');
-        return;
-      }
-
-      // Save session
-      setSessionInStorage(data.data.user);
-      localStorage.setItem('supremo_auth_token', data.data.token);
-
-      // Redirect based on user type
-      const redirectMap: Record<string, string> = {
-        CUSTOMER: ROUTES.customerDashboard,
-        BARBER: ROUTES.barberDashboard,
-        CASHIER: ROUTES.cashierDashboard,
-        MANAGER: ROUTES.managerDashboard,
-      };
-
-      router.push(redirectMap[data.data.user.user_type] || ROUTES.home);
-    } catch (err) {
-      setError('An error occurred. Please try again.');
-      console.error('Login error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-
-    try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
-
-      if (!data.success) {
-        setError(data.error || 'Registration failed');
-        return;
-      }
-
-      // Save session
-      setSessionInStorage(data.data.user);
-      localStorage.setItem('supremo_auth_token', data.data.token);
-
-      router.push(ROUTES.customerDashboard);
-    } catch (err) {
-      setError('An error occurred. Please try again.');
-      console.error('Register error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+export default function ReceiptPage() {
   return (
     <MainLayout>
-      <div className="flex items-center justify-center py-12">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>
-              {isLogin ? 'Login' : 'Register'}
-            </CardTitle>
-            <CardDescription>
-              {isLogin
-                ? 'Sign in to your account'
-                : 'Create a new customer account'}
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent>
-            <form
-              onSubmit={isLogin ? handleLogin : handleRegister}
-              className="space-y-4"
-            >
-              {!isLogin && (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-sm font-medium">First Name</label>
-                      <Input
-                        name="fname"
-                        value={formData.fname}
-                        onChange={handleInputChange}
-                        placeholder="First name"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium">Last Name</label>
-                      <Input
-                        name="lname"
-                        value={formData.lname}
-                        onChange={handleInputChange}
-                        placeholder="Last name"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Phone (Optional)</label>
-                    <Input
-                      name="phone_no"
-                      value={formData.phone_no}
-                      onChange={handleInputChange}
-                      placeholder="+63 9XXXXXXXXX"
-                      type="tel"
-                    />
-                  </div>
-                </>
-              )}
-
-              <div>
-                <label className="text-sm font-medium">Email</label>
-                <Input
-                  name="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  placeholder="you@example.com"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Password</label>
-                <Input
-                  name="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  placeholder="••••••••"
-                  required
-                />
-                {!isLogin && (
-                  <p className="text-xs text-gray-600 mt-1">
-                    At least 6 characters with numbers and letters
-                  </p>
-                )}
-              </div>
-
-              {error && (
-                <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
-                  {error}
-                </div>
-              )}
-
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-full"
-              >
-                {loading
-                  ? 'Processing...'
-                  : isLogin
-                  ? 'Sign In'
-                  : 'Create Account'}
-              </Button>
-            </form>
-
-            <div className="mt-6 border-t pt-6">
-              <p className="text-center text-sm text-gray-600">
-                {isLogin
-                  ? "Don't have an account? "
-                  : 'Already have an account? '}
-                <button
-                  onClick={() => {
-                    setIsLogin(!isLogin);
-                    setError('');
-                  }}
-                  className="font-semibold text-blue-600 hover:underline"
-                >
-                  {isLogin ? 'Register' : 'Sign in'}
-                </button>
-              </p>
-            </div>
-
-            <div className="mt-4 pt-4 border-t">
-              <Link href={ROUTES.guestBook}>
-                <Button variant="outline" className="w-full" size="sm">
-                  Continue as Guest
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Suspense fallback={<div className="text-center py-20">Loading your receipt...</div>}>
+        <ReceiptContent />
+      </Suspense>
     </MainLayout>
+  );
+}
+
+function ReceiptContent() {
+  const searchParams = useSearchParams();
+  const transactionId = searchParams.get('transaction_id');
+
+  const [transaction, setTransaction] = useState<GuestTransaction | null>(null);
+  const [service, setService] = useState<Service | null>(null);
+  const [barber, setBarber] = useState<Barber | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (transactionId) {
+      fetchTransaction();
+    } else {
+      setLoading(false);
+      setError('Missing Transaction ID');
+    }
+  }, [transactionId]);
+
+  const fetchTransaction = async () => {
+    try {
+      const { data, error: dbError } = await db.getGuestTransaction(parseInt(transactionId!));
+      if (dbError || !data) {
+        setError('We couldn\'t find that receipt.');
+        return;
+      }
+      setTransaction(data);
+      if (data.service) setService(data.service);
+      if (data.barber) setBarber(data.barber);
+    } catch (err) {
+      setError('An error occurred while fetching data.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!transaction || !service) return;
+
+    const pdf = generateReceiptPDF({
+      receiptNumber: transaction.receipt_number,
+      date: transaction.appointment_date,
+      time: transaction.appointment_time,
+      service,
+      barber: barber || undefined,
+      amount: transaction.amount_paid,
+      paymentMethod: transaction.payment_method,
+      customerEmail: transaction.guest_email,
+      status: transaction.status || 'Pending' 
+    });
+
+    if (pdf) {
+      downloadReceipt(pdf, generateReceiptFilename(transaction.receipt_number));
+    }
+  };
+
+  if (loading) return <div className="text-center py-20">Verifying transaction...</div>;
+
+  if (error || !transaction || !service) {
+    return (
+      <Card className="max-w-md mx-auto mt-10">
+        <CardContent className="pt-6 text-center">
+          <p className="text-red-500 mb-4">{error}</p>
+          <Button asChild className="w-full"><Link href={ROUTES.home}>Go Home</Link></Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const isCompleted = transaction.status === 'Completed';
+
+  return (
+    <div className="max-w-xl mx-auto p-4">
+      <Card className={`border-t-4 ${isCompleted ? 'border-t-green-600' : 'border-t-amber-500'}`}>
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">
+            {isCompleted ? 'Payment Received! ✓' : 'Booking Confirmed!'}
+          </CardTitle>
+          <p className="text-muted-foreground text-sm">
+            {isCompleted ? 'Official Receipt' : 'Appointment Summary'}
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="bg-muted/50 p-6 rounded-lg text-center">
+            <span className="text-xs uppercase tracking-widest text-muted-foreground">Receipt Number</span>
+            <p className="text-2xl font-mono font-bold">{transaction.receipt_number}</p>
+            <div className="inline-block mt-2 px-3 py-1 rounded-full text-xs font-bold bg-white border">
+              STATUS: {transaction.status?.toUpperCase()}
+            </div>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span>Service</span><span className="font-bold">{service.service_name}</span></div>
+            {barber && <div className="flex justify-between"><span>Barber</span><span className="font-bold">{barber.barber_fname}</span></div>}
+            <div className="flex justify-between"><span>Date</span><span className="font-bold">{transaction.appointment_date}</span></div>
+            <div className="flex justify-between"><span>Time</span><span className="font-bold">{transaction.appointment_time}</span></div>
+            <div className="border-t pt-2 flex justify-between text-base font-bold">
+              <span>Amount Paid</span>
+              <span>₱{transaction.amount_paid.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <Button onClick={handleDownload} className="w-full bg-primary h-12">
+            📥 Download {isCompleted ? 'Official Receipt' : 'Booking Summary'} (PDF)
+          </Button>
+          
+          <Button variant="outline" asChild className="w-full">
+            <Link href={ROUTES.home}>Return to Home</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

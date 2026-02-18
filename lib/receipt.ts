@@ -1,9 +1,6 @@
 import jsPDF from 'jspdf';
 import { Service, Barber } from './types';
 
-// NOTE: 'force-dynamic' is best placed in the page.tsx file, 
-// but we keep the logic here safe for all environments.
-
 export interface ReceiptData {
   receiptNumber: string;
   date: string;
@@ -20,156 +17,86 @@ export interface ReceiptData {
 }
 
 export function generateReceiptPDF(data: ReceiptData): jsPDF | null {
-  // 1. Browser Guard: Prevent server-side execution during build/SSR
+  // 1. Server-Side Guard: Return null if not in browser
   if (typeof window === 'undefined') return null;
-
-  // 2. Business Logic Guard: Only allow receipts for 'Completed' status
-  // Note: If you want guests to see a "Booking Summary" even if Pending, 
-  // you might want to remove this or change the header text based on status.
-  if (data.status !== 'Completed') {
-    console.warn("Receipts are only available for 'Completed' transactions.");
-    return null;
-  }
 
   const pdf = new jsPDF();
   const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
+  const isCompleted = data.status === 'Completed';
   let yPosition = 20;
 
-  // Header
+  // Header - Adjust Title based on status
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(22);
-  pdf.setTextColor(30, 30, 30);
   pdf.text('SUPREMO BARBERSHOP', pageWidth / 2, yPosition, { align: 'center' });
 
-  yPosition += 8;
-  pdf.setFont('helvetica', 'italic');
-  pdf.setFontSize(10);
-  pdf.setTextColor(100, 100, 100);
-  pdf.text('Premium Barbering & Grooming Services', pageWidth / 2, yPosition, {
-    align: 'center',
-  });
-
-  // Main Separator
   yPosition += 10;
+  pdf.setFontSize(12);
+  pdf.setFont('helvetica', 'normal');
+  // If not completed, call it a "BOOKING SUMMARY" instead of a receipt
+  pdf.text(isCompleted ? 'OFFICIAL RECEIPT' : 'BOOKING SUMMARY', pageWidth / 2, yPosition, { align: 'center' });
+
+  // Visual Line
+  yPosition += 5;
+  pdf.setDrawColor(200);
+  pdf.line(20, yPosition, pageWidth - 20, yPosition);
+
+  // Transaction Info
+  yPosition += 15;
+  pdf.setFontSize(10);
+  pdf.text(`Number: ${data.receiptNumber}`, 20, yPosition);
+  pdf.text(`Status: ${data.status.toUpperCase()}`, pageWidth - 20, yPosition, { align: 'right' });
+  
+  yPosition += 7;
+  pdf.text(`Date: ${data.date}`, 20, yPosition);
+  pdf.text(`Time: ${data.time}`, pageWidth - 20, yPosition, { align: 'right' });
+
+  // Details
+  yPosition += 20;
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('SERVICE DETAILS', 20, yPosition);
+  
+  yPosition += 10;
+  pdf.setFont('helvetica', 'normal');
+  pdf.text(`${data.service.service_name}`, 20, yPosition);
+  pdf.text(`₱ ${data.amount.toFixed(2)}`, pageWidth - 20, yPosition, { align: 'right' });
+
+  if (data.barber) {
+    yPosition += 7;
+    pdf.setFontSize(9);
+    pdf.setTextColor(100);
+    pdf.text(`Barber: ${data.barber.barber_fname} ${data.barber.barber_lname}`, 20, yPosition);
+  }
+
+  // Total Section
+  yPosition += 20;
   pdf.setDrawColor(0);
   pdf.setLineWidth(0.5);
-  pdf.line(20, yPosition, pageWidth - 20, yPosition);
-
-  yPosition += 12;
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(11);
-  pdf.setTextColor(0, 0, 0);
-
-  // Receipt Details
-  pdf.text(`Receipt #: ${data.receiptNumber}`, 20, yPosition);
-  pdf.setFont('helvetica', 'bold');
-  pdf.text(`STATUS: ${data.status.toUpperCase()}`, pageWidth - 20, yPosition, { align: 'right' });
-  
-  yPosition += 7;
-  pdf.setFont('helvetica', 'normal');
-  pdf.text(`Date: ${data.date}`, 20, yPosition);
-  yPosition += 7;
-  pdf.text(`Time: ${data.time}`, 20, yPosition);
-
-  // Customer Section
-  if (data.customerName || data.customerEmail) {
-    yPosition += 12;
-    pdf.setFontSize(10);
-    pdf.setTextColor(120, 120, 120);
-    pdf.text('CUSTOMER INFORMATION', 20, yPosition);
-    yPosition += 6;
-    pdf.setFontSize(10);
-    pdf.setTextColor(0, 0, 0);
-
-    if (data.customerName) {
-      pdf.text(`Name: ${data.customerName}`, 25, yPosition);
-      yPosition += 5;
-    }
-    if (data.customerEmail) {
-      pdf.text(`Email: ${data.customerEmail}`, 25, yPosition);
-      yPosition += 5;
-    }
-  }
-
-  // Service Breakdown
-  yPosition += 10;
-  pdf.setFontSize(10);
-  pdf.setTextColor(120, 120, 120);
-  pdf.text('SERVICE RENDERED', 20, yPosition);
-  yPosition += 6;
-  pdf.setFontSize(10);
-  pdf.setTextColor(0, 0, 0);
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.text(`${data.service.service_name}`, 25, yPosition);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text(`₱ ${data.service.price.toFixed(2)}`, pageWidth - 40, yPosition, { align: 'right' });
-  
-  yPosition += 5;
-  pdf.setFontSize(9);
-  pdf.text(`Category: ${data.service.service_category}`, 25, yPosition);
-  
-  if (data.barber) {
-    yPosition += 5;
-    pdf.text(`Served by: ${data.barber.barber_fname} ${data.barber.barber_lname}`, 25, yPosition);
-  }
-
-  // Financials
-  yPosition += 12;
-  pdf.setDrawColor(200, 200, 200);
-  pdf.line(20, yPosition, pageWidth - 20, yPosition);
-  yPosition += 10;
-
-  const amount = data.amount || data.service.price;
-  const discount = data.discount || 0;
-  const total = amount - discount;
-
-  pdf.setFontSize(10);
-  pdf.text('Subtotal:', 20, yPosition);
-  pdf.text(`₱ ${amount.toFixed(2)}`, pageWidth - 40, yPosition, { align: 'right' });
-  
-  if (discount > 0) {
-    yPosition += 6;
-    pdf.setTextColor(200, 0, 0);
-    pdf.text('Discount:', 20, yPosition);
-    pdf.text(`-₱ ${discount.toFixed(2)}`, pageWidth - 40, yPosition, { align: 'right' });
-    pdf.setTextColor(0, 0, 0);
-  }
-
-  // Final Total
-  yPosition += 8;
-  pdf.setLineWidth(0.8);
   pdf.line(pageWidth - 80, yPosition, pageWidth - 20, yPosition);
-  yPosition += 8;
+  
+  yPosition += 10;
+  pdf.setTextColor(0);
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('TOTAL PAID:', 20, yPosition);
-  pdf.text(`₱ ${total.toFixed(2)}`, pageWidth - 40, yPosition, { align: 'right' });
+  pdf.text('TOTAL:', 20, yPosition);
+  pdf.text(`₱ ${data.amount.toFixed(2)}`, pageWidth - 20, yPosition, { align: 'right' });
 
-  // Payment Metadata
-  yPosition += 20;
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.setTextColor(100, 100, 100);
-  pdf.text(`Payment Method: ${data.paymentMethod}`, 20, yPosition);
-  
   // Footer
-  yPosition = pageHeight - 30;
+  yPosition = pdf.internal.pageSize.getHeight() - 30;
   pdf.setFontSize(8);
-  pdf.setTextColor(150, 150, 150);
-  pdf.text('This is an official electronic receipt generated by Supremo Systems.', pageWidth / 2, yPosition, { align: 'center' });
+  pdf.setTextColor(150);
+  pdf.setFont('helvetica', 'italic');
+  pdf.text('Thank you for choosing Supremo. Please present this document upon arrival.', pageWidth / 2, yPosition, { align: 'center' });
 
   return pdf;
 }
 
-export function downloadReceipt(pdf: jsPDF | null, filename: string): void {
-  if (typeof window !== 'undefined' && pdf) {
+export function downloadReceipt(pdf: jsPDF, filename: string): void {
+  if (typeof window !== 'undefined') {
     pdf.save(filename);
   }
 }
 
 export function generateReceiptFilename(receiptNumber: string): string {
-  const date = new Date().toISOString().split('T')[0];
-  return `Supremo_Receipt_${receiptNumber}_${date}.pdf`;
+  return `Supremo_${receiptNumber}.pdf`;
 }
