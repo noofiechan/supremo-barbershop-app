@@ -1,5 +1,4 @@
 'use client';
-
 import dynamic from 'next/dynamic';
 import { Suspense } from 'react'; //
 import { MainLayout } from '@/components/layout/main-layout';
@@ -13,8 +12,8 @@ export default function ReceiptPage() {
   return (
     <MainLayout>
       <div className="container mx-auto py-10">
-        {/* This boundary is required to fix the 'missing-suspense' error */}
-        <Suspense fallback={<div className="text-center py-20">Loading receipt details...</div>}>
+        {/* Without this Suspense tag, the build will always fail */}
+        <Suspense fallback={<div>Loading receipt...</div>}>
           <ReceiptViewNoSSR />
         </Suspense>
       </div>
