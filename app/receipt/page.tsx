@@ -13,8 +13,8 @@ export default function ReceiptPage() {
   return (
     <MainLayout>
       <div className="container mx-auto py-10">
-        {/* This boundary is required to fix the 'missing-suspense' error */}
-        <Suspense fallback={<div className="text-center py-20">Loading receipt details...</div>}>
+        {/* Vercel is crashing because this tag is missing */}
+        <Suspense fallback={<div>Loading receipt details...</div>}>
           <ReceiptViewNoSSR />
         </Suspense>
       </div>
